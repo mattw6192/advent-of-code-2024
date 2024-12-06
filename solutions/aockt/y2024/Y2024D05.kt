@@ -1,6 +1,5 @@
 package aockt.y2024
 
-import aockt.y9999.Y9999D01.parseInput
 import io.github.jadarma.aockt.core.Solution
 
 object Y2024D05 : Solution {
@@ -8,68 +7,64 @@ object Y2024D05 : Solution {
     private var instructions = listOf(listOf<Int>())
     private var pageList = listOf(listOf<Int>())
 
-    private fun parseInput(section: String, splitOn: String): List<List<Int>> {
-        return section.split("\n").map { line ->
-            line.split(splitOn).map { it.toInt() }
+    private fun parseInput(input: String) {
+        val instructionsList = mutableListOf<List<Int>>()
+        val pageListTemp = mutableListOf<List<Int>>()
+        input.lines().forEach {line ->
+            if (line.contains("|")) {
+                instructionsList.add(line.split("|").map { it.toInt() }.toList())
+            } else if (line.contains(",")) {
+                pageListTemp.add(line.split(",").map { it.toInt() }.toList())
+            }
         }
+        instructions = instructionsList
+        pageList = pageListTemp
+    }
+
+    private inline fun Boolean.ifTrue(fn: () -> Unit) = if (this) fn() else Unit
+
+    private fun List<List<Int>>.pagesAfter(page: Int): List<Int> {
+        return filter { it.first() == page }.map { it.last() }
+    }
+
+    private fun isValid(pages: List<Int>): Boolean {
+        val seen = mutableSetOf<Int>()
+        pages.forEach { currentPage ->
+            instructions.pagesAfter(currentPage)
+                .any { it in seen }
+                .ifTrue { return false }
+            seen.add(currentPage)
+        }
+        return true
+    }
+
+    private fun orderPage(pages: List<Int>): List<Int> {
+        val result = mutableListOf<Int>()
+        pages.forEach { currentPage ->
+            val pagesAfterCurrent = instructions.pagesAfter(currentPage)
+            val newLocation = result
+                .indexOfFirst { it in pagesAfterCurrent }
+                .let { if (it == -1) result.size else it }
+            result.add(newLocation, currentPage)
+        }
+        return result
     }
 
     private fun orderSearch(input: String, part: Int): Int {
-        instructions = parseInput(input.lines().first(), "|")
-        pageList = parseInput(input.lines().last(), "|")
+        parseInput(input)
 
-//            Regex("""(\d+)\|(\d+)""")
-//            .findAll(input)
-//            .groupBy({ it.groupValues[1] }, { it.groupValues[2] })
+        println("instructions $instructions")
 
-        val pagesToCheck = Regex("""\d+(,\d+)+""")
-            .findAll(input)
-            .map { it.groupValues[0].split(",") }
-            .toList()
-
-        if (part == 1) {
-            return pagesToCheck.filter { isValidUpdate(it, rules) }.sumOf { it[it.count() / 2].toInt() }
+        println("pagelist: $pageList")
+        return if (part == 1) {
+            pageList.filter { isValid(it) }.sumOf { it[it.count() / 2] }
         } else {
-            return pagesToCheck
-                .filter { !isValidUpdate(it, rules) }
-                .sumOf() { correctUpdate(it, rules)
-                    .let { it[it.count() / 2].toInt() } }
+            pageList
+                .filter { !isValid(it) }
+                .map { orderPage(it) }
+                .sumOf() { it[it.count() / 2] }
         }
-
     }
-
-    private fun correctUpdate(update: List<String>, rules: Map<String, List<String>>): List<String> {
-        var correctedUpdate = update.toMutableList()
-
-        while (!isValidUpdate(correctedUpdate, rules)) {
-            run breaking@{
-                correctedUpdate.withIndex().forEach{ (index, page) ->
-                    val previousPages = correctedUpdate.take(index)
-                    val shouldBeLaterPages = rules[page] ?: listOf()
-                    val firstPageToSwapIndex = previousPages.indexOfFirst { shouldBeLaterPages.contains(it)}
-                    if (firstPageToSwapIndex != -1) {
-                        val firstPageToSwap = previousPages[firstPageToSwapIndex]
-                        correctedUpdate[index] = firstPageToSwap
-                        correctedUpdate[firstPageToSwapIndex] = page
-                        return@breaking
-                    }
-                }
-            }
-        }
-
-        return correctedUpdate
-
-    }
-
-
-    private fun isValidUpdate(update: List<String>, orderingRules: Map<String, List<String>>) : Boolean {
-        return update.withIndex().fold(listOf<Boolean>()) { a, (index, page) ->
-            val previousPages = update.take(index)
-            val shouldBeLaterPages = orderingRules[page] ?: listOf()
-            if (previousPages.any { shouldBeLaterPages.contains(it)}) (a + true) else (a + false)
-        }.all(Boolean::not)
-    }
-
 
     override fun partOne(input: String): Int = orderSearch(input, 1)
     override fun partTwo(input: String): Int = orderSearch(input, 2)
